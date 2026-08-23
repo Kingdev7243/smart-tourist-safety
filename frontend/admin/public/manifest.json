@@ -1,0 +1,16 @@
+{
+  "name": "Smart Tourist Safety Command Center",
+  "short_name": "TouristSafety",
+  "description": "Smart Tourist Safety Monitoring & Incident Response System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#064e3b",
+  "theme_color": "#064e3b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
