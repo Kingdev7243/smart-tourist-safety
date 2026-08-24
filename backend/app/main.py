@@ -3,7 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .routers import alerts, auth, incidents, trips, users, zones
+from .routers import alerts, auth, incidents, trips, tourist, users, zones
 
 
 app = FastAPI(
@@ -36,3 +36,4 @@ app.include_router(trips.router)
 app.include_router(zones.router)
 app.include_router(incidents.router)
 app.include_router(alerts.router)
+app.include_router(tourist.router)

@@ -40,6 +40,20 @@ def get_current_admin(
             headers=_AUTH_HEADERS,
         )
 
+    # "type" was added when tourist auth was introduced. Tokens issued
+    # before that change have no "type" claim at all — those are always
+    # admin tokens (tourists never had a token-issuing endpoint before
+    # this change), so a missing claim is treated as "admin" for
+    # backward compatibility. An explicit non-"admin" type (i.e. a
+    # tourist token) is always rejected here.
+    token_type = payload.get("type")
+    if token_type is not None and token_type != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This token does not belong to an admin account.",
+            headers=_AUTH_HEADERS,
+        )
+
     admin_id = payload.get("sub")
     if admin_id is None:
         raise HTTPException(
@@ -87,3 +101,65 @@ def require_roles(*roles: str):
 
 # Convenience alias for "any authenticated admin, any role"
 require_admin = get_current_admin
+
+
+def get_current_tourist(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> models.User:
+    """Resolve the calling tourist from a Bearer JWT.
+
+    Mirrors get_current_admin, but for the `users` table. Rejects:
+    missing/malformed token, expired token, a token that isn't a
+    tourist token (including admin tokens), a user that no longer
+    exists, and inactive users. Tourist tokens can never satisfy this
+    dependency's counterpart (get_current_admin) or vice versa.
+    """
+    token = credentials.credentials
+
+    try:
+        payload = decode_access_token(token)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired.",
+            headers=_AUTH_HEADERS,
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token.",
+            headers=_AUTH_HEADERS,
+        )
+
+    if payload.get("type") != "tourist":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This token does not belong to a tourist account.",
+            headers=_AUTH_HEADERS,
+        )
+
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token.",
+            headers=_AUTH_HEADERS,
+        )
+
+    user = db.query(models.User).filter(models.User.user_id == int(user_id)).first()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Tourist account no longer exists.",
+            headers=_AUTH_HEADERS,
+        )
+
+    if user.status != "ACTIVE":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is inactive.",
+        )
+
+    return user

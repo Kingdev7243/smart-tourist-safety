@@ -26,15 +26,31 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(admin_id: int, role: str) -> str:
+def _build_token(subject_id: int, role: str, token_type: str) -> str:
     now = datetime.now(timezone.utc)
     payload = {
-        "sub": str(admin_id),
+        "sub": str(subject_id),
         "role": role,
+        # "type" distinguishes admin tokens from tourist tokens so a
+        # tourist JWT can never satisfy an admin-only dependency (and
+        # vice versa), even if the numeric IDs happen to collide.
+        "type": token_type,
         "iat": now,
         "exp": now + timedelta(minutes=JWT_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def create_access_token(admin_id: int, role: str) -> str:
+    """Issue an admin JWT. Unchanged call signature/contract."""
+    return _build_token(subject_id=admin_id, role=role, token_type="admin")
+
+
+def create_tourist_access_token(user_id: int) -> str:
+    """Issue a tourist JWT. Tourists have no admin 'role' concept, so the
+    role claim is fixed to 'TOURIST' purely for readability/debugging —
+    authorization never branches on it (see dependencies.get_current_tourist)."""
+    return _build_token(subject_id=user_id, role="TOURIST", token_type="tourist")
 
 
 def decode_access_token(token: str) -> dict:
